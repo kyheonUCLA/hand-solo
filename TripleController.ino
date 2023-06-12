@@ -10,22 +10,25 @@ const int EEPROM_ADDRESS = 0;
 const int BITS = 1023;
 const int MAX_SPEED = 800;
 
+int currentTicks = 0;
+long eeprom;
+
 MotoronI2C mc; 
 Encoder encoder(2, 3); // D2, D3 are interrupt pins on Uno
 FSR fsr(A0, 30000);
 
 // Global Function Prototypes
 void print_vals(FSR fsr, Encoder e);
-void reset_eeprom(int address, long data=0);
 
 void dual_control(int motor, FSR fsr1, FSR fsr2, Encoder e);
 void single_control(int home, const FSR& fsr, const Encoder& e, int m);
-void keyboard_control(int m, const Encoder& e, int tks);
+void keyboard_control(const Encoder& e, int target);
 
 
 // Generates Lambda Function for Interrupt Callback
 typedef void (*InterruptHandler)();
-InterruptHandler generateInterrupt(Encoder& e) {
+InterruptHandler generateInterrupt(Encoder& e) 
+{
   static Encoder* encoder = &e;
   auto callback = []() {
     encoder->read();
@@ -37,7 +40,6 @@ InterruptHandler generateInterrupt(Encoder& e) {
   };
   return callback;
 }
-
 
 void setup()
 {
@@ -55,30 +57,34 @@ void setup()
   mc.setMaxDeceleration(2, 300);
   
   //Read 4 bytes (long) from eeprom memory to initialize encoder position
-
-  long eeprom;
+  //EEPROM.put(EEPROM_ADDRESS, (long)0)
   EEPROM.get(EEPROM_ADDRESS, eeprom);  
   encoder.setup(eeprom, generateInterrupt(encoder));
+  currentTicks = eeprom;
+  
 }
+
 
 //motor speed from -800 to +800
 // using 9V Battery
 void loop() {
-  Serial.println(encoder.ticks);
-  fsr.read();
+  // fsr.read();
   encoder.update();
   if (Serial.available()) {
-    int tks = Serial.parseInt();
-    Serial.println(tks);
-    //Serial.print(" ");
-    keyboard_control(1, encoder, tks); //turns motor 1
-    keyboard_control(2, encoder, tks); //turns motor 2
-    //Serial.println(encoder.ticks);
+    currentTicks = Serial.parseInt();
+    Serial.println(currentTicks);   
   }
-   
+
+  keyboard_control(encoder, currentTicks);
+ 
   //print_vals(fsr, encoder);
-  EEPROM.put(EEPROM_ADDRESS, encoder.ticks); //update eeprom memory with current motor location
+  EEPROM.put(EEPROM_ADDRESS, encoder.ticks); //update eeprom motor location
+  Serial.println(" ");
+  encoder.print();
+  //delay(500);
 }
+
+
 
 /*
   Uses 2 FSR's to control the backword and forwoard motion of the motors seperatly.
@@ -106,23 +112,24 @@ void dual_control(int motor, FSR fsr1, FSR fsr2, Encoder e) {
   absolute location of the motor. Make sure that the
   Serial Moniter sends data in "no new line ending" mode
 */
-void keyboard_control(int m, const Encoder& e, int tks) {
-  const uint32_t LIM = 5;
-  if (tks < e.ticks) {
-    while (tks < e.ticks) {
-      mc.setSpeed(m, -400);
-    }
-    mc.setSpeed(m, 0);
-  } else if (tks > e.ticks) {
-      while (tks < e.ticks) {
-        mc.setSpeed(m, 400);
-      }
-      mc.setSpeed(m, 0);
+void keyboard_control(const Encoder& e, int target) {
+  const long LIM = 50;
+  if (e.ticks < target - LIM) {
+    mc.setSpeed(3, 800);
+    mc.setSpeed(2, 800);
+    Serial.println(" ");
+    encoder.print();
+  } else if (e.ticks > target + LIM) {
+    mc.setSpeed(3, -800);
+    mc.setSpeed(2, -800);
+    Serial.println(" ");
+    encoder.print();
   } else {
-    mc.setSpeed(m, 0);
+    mc.setSpeed(3, 0);
+    mc.setSpeed(2, 0);
   }
-  Serial.println(e.ticks);
 }
+
 
 /*
   Control scheme where only 1 FSR is used to control the motors.
@@ -153,19 +160,10 @@ void single_control(int home, const FSR& fsr, const Encoder& e, int m) {
   Prints values of FSR and Encoder objects to Serial port
 */
 void print_vals(FSR fsr, Encoder e) {
-  Serial.print(" "); 
-  Serial.print(fsr.signal); 
+  Serial.println(" "); 
+  fsr.print();
   Serial.print(" "); 
   Serial.print(" ");
-  Serial.print(e.ENCA());
-  Serial.print(e.ENCB());
-  Serial.print(" ");
-  Serial.println(e.ticks);
+  e.print();
 }
 
-/*
-  Clears the first 4 bytes (long) of EEPROM memory back to zero
-*/
-void reset_eeprom(int address, long data=0) {
-  EEPROM.put(address, data);
-}

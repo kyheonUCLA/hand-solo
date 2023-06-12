@@ -33,12 +33,6 @@ void Encoder::update() {
   time = micros()/1e06;
 }
 
-void Encoder::print() {
-  Serial.print(" ");
-  Serial.print(a);
-  Serial.println(b);
-}
-
 void Encoder::setup(long eeprom, void (*function)()) {
   pinMode(pinA, INPUT);
   pinMode(pinB, INPUT);
@@ -58,6 +52,13 @@ Encoder& Encoder::operator++(int) {
 Encoder& Encoder::operator--(int) {
   ticks--;
   return *this;
+}
+
+void Encoder::print(){
+  Serial.print(ENCA());
+  Serial.print(ENCB());
+  Serial.print(" ");
+  Serial.print(ticks);
 }
 
 double Encoder::rpm(float gearing) {

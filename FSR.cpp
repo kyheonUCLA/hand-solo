@@ -61,11 +61,6 @@ double FSR::V2F(double v, const double V[], const double F[], int n) {
 }
 
 void FSR::print() {
-  Serial.print(" @");
-  Serial.print(pin);
-  Serial.print(" ");
-  Serial.print(force());
-  Serial.print(" <-> ");
   Serial.print(signal);
 }
 
