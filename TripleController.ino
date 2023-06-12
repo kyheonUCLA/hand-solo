@@ -1,4 +1,5 @@
 #include <Motoron.h>
+#include <EEPROM.h>
 #include "Encoder.h"
 #include "FSR.h"
 
@@ -14,9 +15,11 @@ FSR fsr(A0, 30000);
 
 // Global Function Prototypes
 void print_vals(FSR fsr, Encoder e);
-void motor_controller(int motor, FSR fsr1, FSR fsr2, Encoder e);
-void dual_motor_controller(int home, const FSR& fsr, const Encoder& e, int m);
-void keyboard_control(int motor);
+void dual_control(int motor, FSR fsr1, FSR fsr2, Encoder e);
+void single_control(int home, const FSR& fsr, const Encoder& e, int m);
+void keyboard_control(int m, const Encoder& e, int tks);
+
+
 // Generates Lambda Function for Interrupt Callback
 typedef void (*InterruptHandler)();
 InterruptHandler generateInterrupt(Encoder& e) {
@@ -30,9 +33,7 @@ InterruptHandler generateInterrupt(Encoder& e) {
     } else {
       (*encoder)--;
     }
-  
   };
-  // Convert the lambda function to a function pointer and return
   return callback;
 }
 
@@ -54,16 +55,26 @@ void setup()
 //motor speed from -800 to +800
 // using 9V Battery
 void loop() {
+  EEPROM.read(0);
   fsr.read();
   encoder.update();
-  dual_motor_controller(5000, fsr, encoder, 1);
-  dual_motor_controller(0, fsr, encoder, 2);
-
-  print_vals(fsr, encoder);
+  if (Serial.available()) {
+    int tks = Serial.parseInt();
+    Serial.println(tks);
+    //Serial.print(" ");
+    keyboard_control(1, encoder, tks);
+    keyboard_control(2, encoder, tks);
+    //Serial.println(encoder.ticks);
+  }
+   
+  //print_vals(fsr, encoder);
 }
 
-
-void motor_controller(int motor, FSR fsr1, FSR fsr2, Encoder e) {
+/*
+  Uses 2 FSR's to control the backword and forwoard motion of the motors seperatly.
+  The speed of the motor is proportional to the FSR signal.
+*/
+void dual_control(int motor, FSR fsr1, FSR fsr2, Encoder e) {
   const int LIMIT = 100;
   if (abs(fsr1.signal - fsr2.signal) <= 11) {
     if (e.ticks < -LIMIT) {
@@ -80,19 +91,40 @@ void motor_controller(int motor, FSR fsr1, FSR fsr2, Encoder e) {
   }
 }
 
-void keyboard_control(int motor) {
-  if (Serial.available()) {
-    char key = Serial.read();
-    Serial.println(key);
+/*
+  Uses the user input through the Serial port to control
+  absolute location of the motor. Make sure that the
+  Serial Moniter sends data in "no new line ending" mode
+*/
+void keyboard_control(int m, const Encoder& e, int tks) {
+  const uint32_t LIM = 5;
+  if (tks < e.ticks) {
+    while (tks < e.ticks) {
+      mc.setSpeed(m, -400);
+    }
+    mc.setSpeed(m, 0);
+  } else if (tks > e.ticks) {
+      while (tks < e.ticks) {
+        mc.setSpeed(m, 400);
+      }
+      mc.setSpeed(m, 0);
+  } else {
+    mc.setSpeed(m, 0);
   }
+  Serial.println(e.ticks);
 }
 
-
-void dual_motor_controller(int home, const FSR& fsr, const Encoder& e, int m) {
+/*
+  Control scheme where only 1 FSR is used to control the motors.
+  The motors are driven forward while a signal is detected from the FSR
+  and automatically driven back to the home position when no FSR signal
+  is detected. Speed of forward drive is proportional to FSR signal
+*/
+void single_control(int home, const FSR& fsr, const Encoder& e, int m) {
   const int AUTO_LIMIT = 50;
   const int FWD_LIMIT = 10000; 
 
-  if (fsr.signal <= 300) {
+  if (fsr.signal <= 700) {
     if (e.ticks >  home + AUTO_LIMIT) {
       mc.setSpeed(m, -MAX_SPEED);
     } else {
@@ -107,11 +139,13 @@ void dual_motor_controller(int home, const FSR& fsr, const Encoder& e, int m) {
   }
 }
 
+/*
+  Prints values of FSR and Encoder objects to Serial port
+*/
 void print_vals(FSR fsr, Encoder e) {
   Serial.print(" "); 
   Serial.print(fsr.signal); 
   Serial.print(" "); 
-  //Serial.print(fsr2.signal); 
   Serial.print(" ");
   Serial.print(e.ENCA());
   Serial.print(e.ENCB());
