@@ -19,6 +19,7 @@ FSR fsr(A0, 30000);
 
 // Global Function Prototypes
 void print_vals(FSR fsr, Encoder e);
+void getKeyboardInput(int& ticks);
 
 void dual_control(int motor, FSR fsr1, FSR fsr2, Encoder e);
 void single_control(int home, const FSR& fsr, const Encoder& e, int m);
@@ -61,7 +62,6 @@ void setup()
   EEPROM.get(EEPROM_ADDRESS, eeprom);  
   encoder.setup(eeprom, generateInterrupt(encoder));
   currentTicks = eeprom;
-  
 }
 
 
@@ -70,11 +70,8 @@ void setup()
 void loop() {
   // fsr.read();
   encoder.update();
-  if (Serial.available()) {
-    currentTicks = Serial.parseInt();
-    Serial.println(currentTicks);   
-  }
-
+  
+  getKeyboardInput(currentTicks);
   keyboard_control(encoder, currentTicks);
  
   //print_vals(fsr, encoder);
@@ -137,23 +134,35 @@ void keyboard_control(const Encoder& e, int target) {
   and automatically driven back to the home position when no FSR signal
   is detected. Speed of forward drive is proportional to FSR signal
 */
-void single_control(int home, const FSR& fsr, const Encoder& e, int m) {
+void single_control(int home, const FSR& fsr, const Encoder& e) {
   const int AUTO_LIMIT = 50;
   const int FWD_LIMIT = 10000; 
-
-  if (fsr.signal <= 700) {
+  const int DETECTION_THRESHOLD = 700;
+  
+  if (fsr.signal <= DETECTION_THRESHOLD) {
     if (e.ticks >  home + AUTO_LIMIT) {
-      mc.setSpeed(m, -MAX_SPEED);
+      mc.setSpeed(1, -MAX_SPEED);
+      mc.setSpeed(2, -MAX_SPEED);
     } else {
-      mc.setSpeed(m, 0);
+      mc.setSpeed(1, 0);
+      mc.setSpeed(2, 0);
     }
   } else {
     if (e.ticks < FWD_LIMIT) {
-      mc.setSpeed(m, map(fsr.signal, 0, BITS, 0, MAX_SPEED));
+      mc.setSpeed(1, map(fsr.signal, 0, BITS, 0, MAX_SPEED));
+      mc.setSpeed(2, map(fsr.signal, 0, BITS, 0, MAX_SPEED));
     } else {
-      mc.setSpeed(m, 0);
+      mc.setSpeed(1, 0);
+      mc.setSpeed(2, 0);
     }
   }
+}
+
+void getKeyboardInput(int& ticks) {
+  if (Serial.available()) {
+    ticks = Serial.parseInt();
+    Serial.println(ticks);   
+  }  
 }
 
 /*
