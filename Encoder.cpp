@@ -39,9 +39,10 @@ void Encoder::print() {
   Serial.println(b);
 }
 
-void Encoder::setup(void (*function)()) {
+void Encoder::setup(long eeprom, void (*function)()) {
   pinMode(pinA, INPUT);
   pinMode(pinB, INPUT);
+  ticks = eeprom;
   attachInterrupt(digitalPinToInterrupt(pinA), function, CHANGE);
 }
 

@@ -21,7 +21,7 @@ public:
   void update();
   void print();
   void setPins(int pin_a, int pin_b);
-  void setup(void (*function)());
+  void setup(long eeprom, void (*function)());
   double position(float gearing);
   double rpm(float gearing);
   Encoder& operator++(int);

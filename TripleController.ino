@@ -4,17 +4,20 @@
 #include "FSR.h"
 
 // GLOBAL CONSTANTS
-const uint16_t M3S256_ADDRESS = 17;  
+const int M3S256_ADDRESS = 17;  
+const int EEPROM_ADDRESS = 0;
+
 const int BITS = 1023;
 const int MAX_SPEED = 800;
-const int LEFT_ARROW_KEY = 27;
-const int RIGHT_ARROW_KEY = 26;
+
 MotoronI2C mc; 
 Encoder encoder(2, 3); // D2, D3 are interrupt pins on Uno
 FSR fsr(A0, 30000);
 
 // Global Function Prototypes
 void print_vals(FSR fsr, Encoder e);
+void reset_eeprom(int address, long data=0);
+
 void dual_control(int motor, FSR fsr1, FSR fsr2, Encoder e);
 void single_control(int home, const FSR& fsr, const Encoder& e, int m);
 void keyboard_control(int m, const Encoder& e, int tks);
@@ -24,8 +27,6 @@ void keyboard_control(int m, const Encoder& e, int tks);
 typedef void (*InterruptHandler)();
 InterruptHandler generateInterrupt(Encoder& e) {
   static Encoder* encoder = &e;
-  
-  // Define the lambda function as the callback
   auto callback = []() {
     encoder->read();
     if (encoder->ENCB() != encoder->ENCA()) {
@@ -40,34 +41,43 @@ InterruptHandler generateInterrupt(Encoder& e) {
 
 void setup()
 {
+  Serial.begin(9600);
+
   Wire.begin();
   mc.reinitialize();    // Bytes: 0x96 0x74
   mc.disableCrc();      // Bytes: 0x8B 0x04 0x7B 0x43
   mc.clearResetFlag();  // Bytes: 0xA9 0x00 0x04
 
-  // Configure motor 1
+  // Configure motors
   mc.setMaxAcceleration(1, 140);
   mc.setMaxDeceleration(1, 300);
-  encoder.setup(generateInterrupt(encoder));
-  Serial.begin(9600);
+  mc.setMaxAcceleration(2, 140);
+  mc.setMaxDeceleration(2, 300);
+  
+  //Read 4 bytes (long) from eeprom memory to initialize encoder position
+
+  long eeprom;
+  EEPROM.get(EEPROM_ADDRESS, eeprom);  
+  encoder.setup(eeprom, generateInterrupt(encoder));
 }
 
 //motor speed from -800 to +800
 // using 9V Battery
 void loop() {
-  EEPROM.read(0);
+  Serial.println(encoder.ticks);
   fsr.read();
   encoder.update();
   if (Serial.available()) {
     int tks = Serial.parseInt();
     Serial.println(tks);
     //Serial.print(" ");
-    keyboard_control(1, encoder, tks);
-    keyboard_control(2, encoder, tks);
+    keyboard_control(1, encoder, tks); //turns motor 1
+    keyboard_control(2, encoder, tks); //turns motor 2
     //Serial.println(encoder.ticks);
   }
    
   //print_vals(fsr, encoder);
+  EEPROM.put(EEPROM_ADDRESS, encoder.ticks); //update eeprom memory with current motor location
 }
 
 /*
@@ -153,3 +163,9 @@ void print_vals(FSR fsr, Encoder e) {
   Serial.println(e.ticks);
 }
 
+/*
+  Clears the first 4 bytes (long) of EEPROM memory back to zero
+*/
+void reset_eeprom(int address, long data=0) {
+  EEPROM.put(address, data);
+}
